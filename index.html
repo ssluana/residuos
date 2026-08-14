@@ -225,6 +225,7 @@ button:focus-visible,.entrada:focus-visible{outline:3px solid var(--tinta);outli
     <div class="lista" id="lista"></div>
     <div class="rodape">
       <div class="tot"><span>Total geral</span><b id="totalKg">0,0 kg</b></div>
+      <div class="ultimo" id="syncAviso" hidden></div>
       <div class="ultimo" id="ultimoAviso"></div>
       <button class="acao" id="btnExcel">
         <svg viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
@@ -272,6 +273,10 @@ button:focus-visible,.entrada:focus-visible{outline:3px solid var(--tinta);outli
 <script>
 /* ═══ CONFIGURAÇÃO ═══ */
 const PESSOAS_PADRAO = ['Ronaldo'];
+
+/* Cole entre as aspas a URL do Apps Script (termina em /exec).
+   Enquanto estiver vazio, o app funciona só no aparelho, sem enviar nada. */
+const SCRIPT_URL = '';
 /* ════════════════════ */
 
 const SETA='M5 15L9.5 7.2M9.5 7.2L6.8 8.5M9.5 7.2L9.8 10.2';
@@ -421,14 +426,14 @@ $('#btnSalvar').onclick=()=>{
   if(!valor()) return;
   const regs=DB.ler();
   regs.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,7), data:st.data, tipo:st.tipo.id,
-    pessoa:st.pessoa, kg:valor(), hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), criadoEm:Date.now()});
+    pessoa:st.pessoa, kg:valor(), hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), criadoEm:Date.now(), enviado:false});
   DB.gravar(regs);
   const c=$('#confirma');
   c.style.setProperty('--c',st.tipo.cor);
   $('#confDetalhe').innerHTML=`${st.tipo.nome} · <b>${fmt(valor())} kg</b><br>${esc(primeiro(st.pessoa))} · ${rotulo(st.data).toLowerCase()}`;
   c.classList.add('ativa');
   if(navigator.vibrate) navigator.vibrate(18);
-  resumo();
+  resumo(); sincronizar();
 };
 $('#btnOutro').onclick=()=>{
   $('#confirma').classList.remove('ativa');
@@ -444,7 +449,7 @@ $('#btnFecharEd').onclick=()=>$('#edicao').classList.remove('ativa');
 
 /* ── lista ── */
 function abreLista(){
-  const regs=DB.ler().sort((a,b)=> a.data===b.data ? b.criadoEm-a.criadoEm : b.data.localeCompare(a.data));
+  const regs=DB.ler().filter(r=>!r.removido).sort((a,b)=> a.data===b.data ? b.criadoEm-a.criadoEm : b.data.localeCompare(a.data));
   if(!regs.length){
     $('#lista').innerHTML=`<div class="vazio">Nenhuma pesagem registrada ainda.<br>Toque em um tipo de resíduo para começar.</div>`;
   }else{
@@ -464,11 +469,11 @@ function abreLista(){
     $('#lista').innerHTML=h;
   }
   $('#totalKg').textContent=fmt(regs.reduce((s,r)=>s+r.kg,0))+' kg';
-  pintaUltimo();
+  pintaUltimo(); pintaSync();
   $('#folha').classList.add('ativa');
 }
 function resumo(){
-  const hoje=DB.ler().filter(r=>r.data===hojeISO());
+  const hoje=DB.ler().filter(r=>!r.removido && r.data===hojeISO());
   $('#resumoKg').textContent=fmt(hoje.reduce((s,r)=>s+r.kg,0))+' kg';
   $('#resumoQtd').textContent = hoje.length===1?'1 hoje':hoje.length+' hoje';
 }
@@ -491,17 +496,19 @@ $('#btnSalvarEd').onclick=()=>{
   const sel=document.querySelector('[data-edtipo][aria-pressed="true"]');
   r.tipo=sel?sel.dataset.edtipo:r.tipo;
   r.pessoa=$('#edPessoa').value; r.kg=kg; r.data=$('#edData').value||r.data;
-  DB.gravar(regs); $('#edicao').classList.remove('ativa'); abreLista(); resumo();
+  r.enviado=false;
+  DB.gravar(regs); $('#edicao').classList.remove('ativa'); abreLista(); resumo(); sincronizar();
 };
 $('#btnExcluir').onclick=()=>{
   if(!confirm('Excluir este registro? Não dá para desfazer.')) return;
-  DB.gravar(DB.ler().filter(x=>x.id!==st.editando));
-  $('#edicao').classList.remove('ativa'); abreLista(); resumo();
+  const regs=DB.ler(); const r=regs.find(x=>x.id===st.editando);
+  if(r){ r.removido=true; r.enviado=false; DB.gravar(regs); }
+  $('#edicao').classList.remove('ativa'); abreLista(); resumo(); sincronizar();
 };
 
 /* ── exportação ── */
 function tabela(){
-  const regs=DB.ler().sort((a,b)=> a.data===b.data ? a.criadoEm-b.criadoEm : a.data.localeCompare(b.data));
+  const regs=DB.ler().filter(r=>!r.removido).sort((a,b)=> a.data===b.data ? a.criadoEm-b.criadoEm : a.data.localeCompare(b.data));
   return [['Data','Hora','Tipo de resíduo','Quem pesou','Peso (kg)'],
     ...regs.map(r=>[brData(r.data), r.hora, tipoDe(r.tipo).nome, r.pessoa, r.kg])];
 }
@@ -526,6 +533,64 @@ function pintaUltimo(){
     `<span>Último download: <b>${data} às ${hora}</b>.`+
     (pendentes?` <b>${pendentes} ${pendentes===1?'pesagem nova desde então':'pesagens novas desde então'}.</b>`:' Tudo já foi salvo em planilha.')+`</span>`;
 }
+
+/* ── sincronização com a planilha do Google ── */
+let sincronizando=false;
+
+function pintaSync(){
+  const el=$('#syncAviso'); if(!el) return;
+  if(!SCRIPT_URL){ el.hidden=true; return; }
+  el.hidden=false;
+  const pend=DB.ler().filter(r=>!r.enviado).length;
+  const nuvem='<svg viewBox="0 0 24 24"><path d="M7 18a4 4 0 010-8 5.5 5.5 0 0110.5-1.5A3.75 3.75 0 0118 18z"/><path d="M9.5 14l2 2 3.5-3.5"/></svg>';
+  const relogio='<svg viewBox="0 0 24 24"><path d="M7 18a4 4 0 010-8 5.5 5.5 0 0110.5-1.5A3.75 3.75 0 0118 18z"/><path d="M12 11v3l2 1.5"/></svg>';
+  if(sincronizando){
+    el.className='ultimo';
+    el.innerHTML=relogio+'<span>Enviando para a planilha…</span>';
+  }else if(pend){
+    el.className='ultimo pendente';
+    el.innerHTML=relogio+`<span><b>${pend} ${pend===1?'pesagem aguardando envio':'pesagens aguardando envio'}.</b> Serão enviadas assim que houver internet.</span>`;
+  }else{
+    el.className='ultimo';
+    el.innerHTML=nuvem+'<span>Tudo enviado para a planilha.</span>';
+  }
+}
+
+async function sincronizar(){
+  if(!SCRIPT_URL || sincronizando) return;
+  const pend=DB.ler().filter(r=>!r.enviado);
+  if(!pend.length){ pintaSync(); return; }
+  if(navigator.onLine===false){ pintaSync(); return; }
+
+  sincronizando=true; pintaSync();
+  const antes=pend.length;
+  try{
+    const lote=pend.slice(0,80).map(r=>({
+      id:r.id, data:brData(r.data), hora:r.hora, tipo:tipoDe(r.tipo).nome,
+      pessoa:r.pessoa, kg:r.kg, situacao: r.removido?'Excluído':'Ativo'
+    }));
+    const resp=await fetch(SCRIPT_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({registros:lote})
+    });
+    const res=await resp.json();
+    if(res && res.ok && Array.isArray(res.recebidos)){
+      const ok=new Set(res.recebidos);
+      const todos=DB.ler();
+      todos.forEach(r=>{ if(ok.has(r.id)) r.enviado=true; });
+      DB.gravar(todos);
+    }
+  }catch(e){ /* sem rede ou erro: mantém na fila e tenta depois */ }
+
+  sincronizando=false; pintaSync();
+  const depois=DB.ler().filter(r=>!r.enviado).length;
+  if(depois>0 && depois<antes) setTimeout(sincronizar,1500);
+}
+
+window.addEventListener('online',sincronizar);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) sincronizar(); });
+setInterval(sincronizar,60000);
 
 function gerar(){
   const dados=tabela();
@@ -563,6 +628,7 @@ if(navigator.canShare){
 }
 
 resumo();
+sincronizar();
 </script>
 </body>
 </html>
