@@ -193,12 +193,18 @@ button:focus-visible,.entrada:focus-visible{outline:3px solid var(--tinta);outli
 
     <section class="tela" id="tela2">
       <button class="voltar" data-volta="1"><svg viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>Voltar</button>
-      <h2 class="pergunta">Quem pesou?</h2>
-      <div class="pessoas" id="pessoas"></div>
+      <h2 class="pergunta">Qual operação?</h2>
+      <div class="pessoas" id="operacoes"></div>
     </section>
 
     <section class="tela" id="tela3">
       <button class="voltar" data-volta="2"><svg viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>Voltar</button>
+      <h2 class="pergunta">Quem pesou?</h2>
+      <div class="pessoas" id="pessoas"></div>
+    </section>
+
+    <section class="tela" id="tela4">
+      <button class="voltar" data-volta="3"><svg viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>Voltar</button>
       <h2 class="pergunta">Quantos quilos?</h2>
       <div class="visor"><span class="num vazio" id="visor" aria-live="polite">0,0</span><span class="un">kg</span></div>
       <div class="teclado" id="teclado"></div>
@@ -244,6 +250,7 @@ button:focus-visible,.entrada:focus-visible{outline:3px solid var(--tinta);outli
     </header>
     <div class="lista">
       <div class="campo"><label>Tipo de resíduo</label><div class="chips" id="edChips"></div></div>
+      <div class="campo"><label>Operação</label><select class="entrada" id="edOperacao"></select></div>
       <div class="campo"><label>Quem pesou</label><select class="entrada" id="edPessoa"></select></div>
       <div class="campo"><label>Peso em quilos</label><input class="entrada" id="edPeso" inputmode="decimal" type="text"></div>
       <div class="campo"><label>Data</label><input class="entrada" id="edData" type="date"></div>
@@ -268,15 +275,30 @@ button:focus-visible,.entrada:focus-visible{outline:3px solid var(--tinta);outli
     </div>
   </div>
 
+  <div class="folha" id="operacoesFolha">
+    <header><h2>Operações</h2>
+      <button class="fechar" id="btnFecharOp" aria-label="Fechar"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </header>
+    <div class="lista">
+      <div class="addlinha">
+        <input class="entrada" id="novaOperacao" type="text" placeholder="Nome da operação" autocomplete="off">
+        <button id="btnAddOperacao">Incluir</button>
+      </div>
+      <div id="listaOperacoes"></div>
+      <p class="dica">As operações ficam salvas neste aparelho. Remover uma não apaga as pesagens já registradas nela.</p>
+    </div>
+  </div>
+
 </div>
 
 <script>
 /* ═══ CONFIGURAÇÃO ═══ */
 const PESSOAS_PADRAO = ['Ronaldo'];
+const OPERACOES_PADRAO = ['Pousada Literária'];
 
 /* Cole entre as aspas a URL do Apps Script (termina em /exec).
    Enquanto estiver vazio, o app funciona só no aparelho, sem enviar nada. */
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz6ElpE-fVRAmYFkEFHAy6oNQxUdQhdlIXWVCd4d-hKnegQK73y79CN6fD-sbFDxQ/exec';
+const SCRIPT_URL = '';
 /* ════════════════════ */
 
 const SETA='M5 15L9.5 7.2M9.5 7.2L6.8 8.5M9.5 7.2L9.8 10.2';
@@ -308,6 +330,7 @@ function Caixa(chave,padrao){
 }
 const DB=Caixa('pesagens_v1',[]);
 const PES=Caixa('pessoas_v1',PESSOAS_PADRAO.slice());
+const OPS=Caixa('operacoes_v1',OPERACOES_PADRAO.slice());
 const BAIXA=Caixa('ultimaBaixa_v1',null);
 
 const $=s=>document.querySelector(s);
@@ -327,7 +350,7 @@ function rotulo(s){
 }
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-const st={tipo:null,pessoa:null,peso:'',data:hojeISO(),editando:null};
+const st={tipo:null,operacao:null,pessoa:null,peso:'',data:hojeISO(),editando:null};
 
 /* ── montagem fixa ── */
 $('#grade').innerHTML=TIPOS.map(t=>
@@ -371,26 +394,64 @@ $('#btnAddPessoa').onclick=()=>{
 $('#novoNome').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#btnAddPessoa').click(); });
 $('#btnFecharPes').onclick=()=>$('#pessoasFolha').classList.remove('ativa');
 
+/* ── operações ── */
+function pintaOperacoes(){
+  const lista=OPS.ler();
+  $('#operacoes').innerHTML = lista.map(o=>
+    `<button class="pessoa" data-operacao="${esc(o)}"><span class="ini">${esc(iniciais(o))}</span><b>${esc(o)}</b></button>`).join('')
+    + `<button class="pessoa nova" id="btnNovaOperacao"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><b>Operação</b></button>`;
+
+  $('#listaOperacoes').innerHTML = lista.map(o=>
+    `<div class="linhaPessoa"><span class="ini">${esc(iniciais(o))}</span><b>${esc(o)}</b>
+      <button data-removeop="${esc(o)}" aria-label="Remover ${esc(o)}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`).join('');
+}
+pintaOperacoes();
+
+function opcoesOperacao(atual){
+  const lista=OPS.ler().slice();
+  if(atual && !lista.includes(atual)) lista.push(atual);
+  $('#edOperacao').innerHTML=lista.map(o=>`<option>${esc(o)}</option>`).join('');
+}
+
+$('#btnAddOperacao').onclick=()=>{
+  const nome=$('#novaOperacao').value.trim().replace(/\s+/g,' ');
+  if(!nome) return;
+  const lista=OPS.ler();
+  if(lista.some(o=>o.toLowerCase()===nome.toLowerCase())){ $('#novaOperacao').value=''; return; }
+  lista.push(nome); OPS.gravar(lista); pintaOperacoes();
+  $('#novaOperacao').value='';
+};
+$('#novaOperacao').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#btnAddOperacao').click(); });
+$('#btnFecharOp').onclick=()=>$('#operacoesFolha').classList.remove('ativa');
+
 /* ── navegação ── */
 function irPara(n){
   document.querySelectorAll('.tela').forEach(t=>t.classList.remove('ativa'));
   $('#tela'+n).classList.add('ativa'); $('.palco').scrollTop=0;
   let h='';
   if(st.tipo&&n>1) h+=`<button class="migalha" data-ir="1"><i style="background:${st.tipo.cor}"></i>${st.tipo.nome}</button>`;
-  if(st.pessoa&&n>2) h+=`<button class="migalha" data-ir="2">${esc(primeiro(st.pessoa))}</button>`;
+  if(st.operacao&&n>2) h+=`<button class="migalha" data-ir="2">${esc(st.operacao)}</button>`;
+  if(st.pessoa&&n>3) h+=`<button class="migalha" data-ir="3">${esc(primeiro(st.pessoa))}</button>`;
   $('#trilha').innerHTML=h;
 }
 
 document.addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
   if(b.id==='btnNovaPessoa'){ $('#pessoasFolha').classList.add('ativa'); setTimeout(()=>$('#novoNome').focus(),120); return; }
+  if(b.id==='btnNovaOperacao'){ $('#operacoesFolha').classList.add('ativa'); setTimeout(()=>$('#novaOperacao').focus(),120); return; }
   if(b.dataset.remove!==undefined){
     const lista=PES.ler();
     if(lista.length<=1) return;
     PES.gravar(lista.filter(p=>p!==b.dataset.remove)); pintaPessoas(); return;
   }
+  if(b.dataset.removeop!==undefined){
+    const lista=OPS.ler();
+    if(lista.length<=1) return;
+    OPS.gravar(lista.filter(o=>o!==b.dataset.removeop)); pintaOperacoes(); return;
+  }
   if(b.dataset.tipo){ st.tipo=tipoDe(b.dataset.tipo); setTimeout(()=>irPara(2),140); }
-  if(b.dataset.pessoa){ st.pessoa=b.dataset.pessoa; setTimeout(()=>irPara(3),140); }
+  if(b.dataset.operacao){ st.operacao=b.dataset.operacao; setTimeout(()=>irPara(3),140); }
+  if(b.dataset.pessoa){ st.pessoa=b.dataset.pessoa; setTimeout(()=>irPara(4),140); }
   if(b.dataset.volta) irPara(+b.dataset.volta);
   if(b.dataset.ir) irPara(+b.dataset.ir);
   if(b.dataset.tecla) digita(b.dataset.tecla);
@@ -426,18 +487,18 @@ $('#btnSalvar').onclick=()=>{
   if(!valor()) return;
   const regs=DB.ler();
   regs.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,7), data:st.data, tipo:st.tipo.id,
-    pessoa:st.pessoa, kg:valor(), hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), criadoEm:Date.now(), enviado:false});
+    operacao:st.operacao, pessoa:st.pessoa, kg:valor(), hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), criadoEm:Date.now(), enviado:false});
   DB.gravar(regs);
   const c=$('#confirma');
   c.style.setProperty('--c',st.tipo.cor);
-  $('#confDetalhe').innerHTML=`${st.tipo.nome} · <b>${fmt(valor())} kg</b><br>${esc(primeiro(st.pessoa))} · ${rotulo(st.data).toLowerCase()}`;
+  $('#confDetalhe').innerHTML=`${st.tipo.nome} · <b>${fmt(valor())} kg</b><br>${esc(st.operacao)} · ${esc(primeiro(st.pessoa))} · ${rotulo(st.data).toLowerCase()}`;
   c.classList.add('ativa');
   if(navigator.vibrate) navigator.vibrate(18);
   resumo(); sincronizar();
 };
 $('#btnOutro').onclick=()=>{
   $('#confirma').classList.remove('ativa');
-  st.tipo=null; st.pessoa=null; st.peso='';
+  st.tipo=null; st.operacao=null; st.pessoa=null; st.peso='';
   $('#visor').textContent='0,0'; $('#visor').classList.add('vazio');
   $('#btnSalvar').disabled=true; $('#btnSalvar').style.background='';
   irPara(1);
@@ -462,7 +523,7 @@ function abreLista(){
       }
       const t=tipoDe(r.tipo);
       h+=`<button class="item" data-item="${r.id}"><i style="background:${t.cor}"></i>
-        <span class="txt"><b>${t.nome}</b><span>${esc(primeiro(r.pessoa))} · ${r.hora}</span></span>
+        <span class="txt"><b>${t.nome}</b><span>${esc(r.operacao||'—')} · ${esc(primeiro(r.pessoa))} · ${r.hora}</span></span>
         <span class="kg">${fmt(r.kg)} kg</span>
         <svg class="seta" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>`;
     });
@@ -483,6 +544,8 @@ function abreEdicao(id){
   const r=DB.ler().find(x=>x.id===id); if(!r) return;
   st.editando=id;
   document.querySelectorAll('[data-edtipo]').forEach(c=>c.setAttribute('aria-pressed', String(c.dataset.edtipo===r.tipo)));
+  opcoesOperacao(r.operacao);
+  $('#edOperacao').value=r.operacao||OPS.ler()[0];
   opcoesPessoa(r.pessoa);
   $('#edPessoa').value=r.pessoa;
   $('#edPeso').value=fmt(r.kg);
@@ -495,7 +558,7 @@ $('#btnSalvarEd').onclick=()=>{
   if(!kg||kg<=0){ alert('Informe um peso válido, maior que zero.'); return; }
   const sel=document.querySelector('[data-edtipo][aria-pressed="true"]');
   r.tipo=sel?sel.dataset.edtipo:r.tipo;
-  r.pessoa=$('#edPessoa').value; r.kg=kg; r.data=$('#edData').value||r.data;
+  r.operacao=$('#edOperacao').value; r.pessoa=$('#edPessoa').value; r.kg=kg; r.data=$('#edData').value||r.data;
   r.enviado=false;
   DB.gravar(regs); $('#edicao').classList.remove('ativa'); abreLista(); resumo(); sincronizar();
 };
@@ -509,8 +572,8 @@ $('#btnExcluir').onclick=()=>{
 /* ── exportação ── */
 function tabela(){
   const regs=DB.ler().filter(r=>!r.removido).sort((a,b)=> a.data===b.data ? a.criadoEm-b.criadoEm : a.data.localeCompare(b.data));
-  return [['Data','Hora','Tipo de resíduo','Quem pesou','Peso (kg)'],
-    ...regs.map(r=>[brData(r.data), r.hora, tipoDe(r.tipo).nome, r.pessoa, r.kg])];
+  return [['Data','Hora','Operação','Tipo de resíduo','Quem pesou','Peso (kg)'],
+    ...regs.map(r=>[brData(r.data), r.hora, r.operacao||'', tipoDe(r.tipo).nome, r.pessoa, r.kg])];
 }
 function marcaBaixa(){ BAIXA.gravar(Date.now()); pintaUltimo(); }
 
@@ -567,7 +630,7 @@ async function sincronizar(){
   try{
     const lote=pend.slice(0,80).map(r=>({
       id:r.id, data:brData(r.data), hora:r.hora, tipo:tipoDe(r.tipo).nome,
-      pessoa:r.pessoa, kg:r.kg, situacao: r.removido?'Excluído':'Ativo'
+      operacao:r.operacao||'', pessoa:r.pessoa, kg:r.kg, situacao: r.removido?'Excluído':'Ativo'
     }));
     const resp=await fetch(SCRIPT_URL,{
       method:'POST',
@@ -597,7 +660,7 @@ function gerar(){
   if(dados.length===1) return null;
   if(typeof XLSX!=='undefined'){
     const ws=XLSX.utils.aoa_to_sheet(dados);
-    ws['!cols']=[{wch:12},{wch:8},{wch:22},{wch:22},{wch:11}];
+    ws['!cols']=[{wch:12},{wch:8},{wch:22},{wch:22},{wch:22},{wch:11}];
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Pesagens');
     const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
     return {blob:new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), nome:`pesagens_${hojeISO()}.xlsx`};
