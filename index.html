@@ -329,8 +329,36 @@ function Caixa(chave,padrao){
   };
 }
 const DB=Caixa('pesagens_v1',[]);
-const PES=Caixa('pessoas_v1',PESSOAS_PADRAO.slice());
-const OPS=Caixa('operacoes_v1',OPERACOES_PADRAO.slice());
+function Mesclada(chave,padrao){
+  const cx=Caixa(chave,null);
+  const antiga=Caixa(chave.replace('_v2','_v1'),null);
+  return {
+    ler(){
+      let e=cx.ler();
+      if(!e){
+        const velho=antiga.ler();
+        e={extras:Array.isArray(velho)?velho.filter(x=>!padrao.some(p=>p.toLowerCase()===String(x).toLowerCase())):[],removidas:[]};
+      }
+      const fora=new Set((e.removidas||[]).map(x=>String(x).toLowerCase()));
+      const saida=padrao.filter(x=>!fora.has(x.toLowerCase()));
+      const vistos=new Set(saida.map(x=>x.toLowerCase()));
+      (e.extras||[]).forEach(x=>{
+        if(!vistos.has(String(x).toLowerCase())){ saida.push(x); vistos.add(String(x).toLowerCase()); }
+      });
+      return saida;
+    },
+    gravar(nova){
+      const pad=new Set(padrao.map(x=>x.toLowerCase()));
+      const agora=new Set(nova.map(x=>String(x).toLowerCase()));
+      cx.gravar({
+        extras:nova.filter(x=>!pad.has(String(x).toLowerCase())),
+        removidas:padrao.filter(x=>!agora.has(x.toLowerCase()))
+      });
+    }
+  };
+}
+const PES=Mesclada('pessoas_v2',PESSOAS_PADRAO);
+const OPS=Mesclada('operacoes_v2',OPERACOES_PADRAO);
 const BAIXA=Caixa('ultimaBaixa_v1',null);
 
 const $=s=>document.querySelector(s);
