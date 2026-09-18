@@ -48,13 +48,20 @@ body{font-family:'Archivo',system-ui,sans-serif;font-variation-settings:'wdth' 1
 @keyframes entra{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
 .pergunta{font-size:27px;line-height:1.12;font-weight:800;font-variation-settings:'wdth' 112;letter-spacing:-.015em;margin:4px 0 16px}
 
-.grade{display:grid;grid-template-columns:1fr 1fr;gap:11px}
-.tipo{--c:#79837E;background:var(--c);color:#fff;border:none;border-radius:var(--r);
-  min-height:112px;padding:14px 13px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;
+.grade{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:22px}
+.grade:last-child{margin-bottom:0}
+.tipo{--c:#79837E;--sobre:#fff;--fraco:rgba(255,255,255,.72);
+  background:var(--c);color:var(--sobre);border:none;border-radius:16px;
+  min-height:148px;padding:16px 15px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;gap:12px;
   font-family:inherit;cursor:pointer;text-align:left;transition:transform .12s ease,box-shadow .12s ease;box-shadow:0 2px 0 rgba(0,0,0,.13)}
+.tipo.clara{border:2px solid #9FABA4;box-shadow:0 2px 0 rgba(0,0,0,.07)}
 .tipo:active{transform:translateY(2px);box-shadow:none}
-.tipo svg{width:34px;height:34px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;opacity:.95}
-.tipo b{font-size:17px;font-weight:700;font-variation-settings:'wdth' 108;line-height:1.15}
+.tipo svg{width:54px;height:54px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;opacity:.95}
+.tipo b{font-size:17px;font-weight:700;font-variation-settings:'wdth' 108;line-height:1.15;display:block}
+.tipo .sub{font-size:12px;font-weight:500;color:var(--fraco);line-height:1.3;display:block;margin-top:2px}
+.tipo.largo{grid-column:1/-1;min-height:112px;flex-direction:row;align-items:center;gap:18px}
+.tipo.largo svg{flex-shrink:0}
+.tipo.largo>span{flex:1}
 
 .pessoas{display:grid;grid-template-columns:1fr 1fr;gap:11px}
 .pessoa{background:var(--painel);border:1.5px solid var(--linha);border-radius:var(--r);min-height:76px;padding:13px;
@@ -98,7 +105,7 @@ body{font-family:'Archivo',system-ui,sans-serif;font-variation-settings:'wdth' 1
 .confirma.ativa{display:flex;animation:sobe .3s cubic-bezier(.2,.7,.3,1)}
 @keyframes sobe{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
 .confirma .marca{width:96px;height:96px;margin-bottom:22px}
-.confirma .marca circle{fill:rgba(255,255,255,.16)}
+.confirma .marca circle{fill:currentColor;opacity:.16}
 .confirma .marca path{stroke:currentColor;fill:none;stroke-width:6.5;stroke-linecap:round;stroke-linejoin:round;
   stroke-dasharray:48;stroke-dashoffset:48;animation:risca .4s .16s cubic-bezier(.4,0,.2,1) forwards}
 @keyframes risca{to{stroke-dashoffset:0}}
@@ -108,6 +115,8 @@ body{font-family:'Archivo',system-ui,sans-serif;font-variation-settings:'wdth' 1
 .confirma .btn{width:100%;min-height:66px;border:none;border-radius:var(--r);background:#fff;color:var(--tinta);
   font-family:inherit;font-size:19px;font-weight:700;font-variation-settings:'wdth' 110;cursor:pointer}
 .confirma .btn.vazado{background:transparent;border:1.5px solid rgba(255,255,255,.5);color:#fff;min-height:52px;font-size:15px;margin-top:10px}
+.confirma.clara .btn{border:2px solid #9FABA4}
+.confirma.clara .btn.vazado{border-color:#9FABA4;color:#2A322E}
 
 .folha{position:absolute;inset:0;z-index:30;background:var(--fundo);display:none;flex-direction:column}
 .folha.ativa{display:flex;animation:sobe .26s cubic-bezier(.2,.7,.3,1)}
@@ -188,7 +197,7 @@ button:focus-visible,.entrada:focus-visible{outline:3px solid var(--tinta);outli
       </button>
       <input type="date" id="campoData">
       <h2 class="pergunta">O que você pesou?</h2>
-      <div class="grade" id="grade"></div>
+      <div id="grade"></div>
     </section>
 
     <section class="tela" id="tela2">
@@ -294,29 +303,41 @@ button:focus-visible,.entrada:focus-visible{outline:3px solid var(--tinta);outli
 <script>
 /* ═══ CONFIGURAÇÃO ═══ */
 const PESSOAS_PADRAO = ['Ronaldo'];
-const OPERACOES_PADRAO = ['Pousada Literária','Empório','Livraria','Atlântico'];
+const OPERACOES_PADRAO = ['Pousada Literária'];
 
 /* Cole entre as aspas a URL do Apps Script (termina em /exec).
    Enquanto estiver vazio, o app funciona só no aparelho, sem enviar nada. */
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz6ElpE-fVRAmYFkEFHAy6oNQxUdQhdlIXWVCd4d-hKnegQK73y79CN6fD-sbFDxQ/exec';
+const SCRIPT_URL = '';
 /* ════════════════════ */
 
 const SETA='M5 15L9.5 7.2M9.5 7.2L6.8 8.5M9.5 7.2L9.8 10.2';
 const RECICLA=`<path d="${SETA}"/><path d="${SETA}" transform="rotate(120 12 12)"/><path d="${SETA}" transform="rotate(240 12 12)"/>`;
 
+const MACA='<mask id="mordida">'
+ +'<rect width="24" height="24" style="fill:#fff"/>'
+ +'<circle cx="19.4" cy="11" r="6" style="fill:#000"/>'
+ +'<circle cx="14.8" cy="14.9" r="1.05" style="fill:#000"/>'
+ +'<circle cx="13.6" cy="12.6" r="1.05" style="fill:#000"/>'
+ +'<circle cx="13.6" cy="9.4" r="1.05" style="fill:#000"/>'
+ +'<circle cx="14.8" cy="7.1" r="1.05" style="fill:#000"/></mask>'
+ +'<path mask="url(#mordida)" style="fill:currentColor;stroke:none" d="M12.1 7.6C11.1 6.1 9.3 5.4 7.7 6.1C5.6 7 4.3 9.6 4.6 12.6C4.9 15.8 6.6 19.6 9 20.6C10.1 21.1 11.2 20.6 12.1 20.6C13 20.6 14.1 21.1 15.2 20.6C17.6 19.6 19.3 15.8 19.6 12.6C19.9 9.6 18.6 7 16.5 6.1C14.9 5.4 13.1 6.1 12.1 7.6Z"/>'
+ +'<rect x="11.35" y="4" width="1.5" height="3.6" rx=".75" style="fill:currentColor;stroke:none"/>'
+ +'<path style="fill:currentColor;stroke:none" d="M12.6 5.1C13.6 3.4 15.6 3.1 16.7 3.6C16.4 5.4 14.5 6.4 12.9 5.7Z"/>';
+
 const TIPOS=[
- {id:'organico',nome:'Orgânico',cor:'#6B4423',
-  icone:'<path d="M12 21c-4 0-7-3-7-7 0-5 4-9 9-9 1.5 0 3 .4 4 1"/><path d="M12 21c0-6 3-10 8-12"/><path d="M15 4c0 2 1 3 3 3"/>'},
- {id:'reciclavel',nome:'Recicláveis',cor:'#1D63C4',icone:RECICLA},
- {id:'vidro',nome:'Vidro',cor:'#1E8A4C',
-  icone:'<path d="M10.5 3h3v3l1.5 3v9a1.5 1.5 0 01-1.5 1.5h-3A1.5 1.5 0 019 19.5V9l1.5-3z"/><path d="M9 12.5h6"/>'},
- {id:'ceramica',nome:'Cerâmica',cor:'#6B4E9E',
-  icone:'<path d="M6 8h8v5.5a4 4 0 01-8 0z"/><path d="M14 10h1.6a1.8 1.8 0 010 3.6H14"/><path d="M3.5 18h17a2.5 2.5 0 01-2.5 2.5H6a2.5 2.5 0 01-2.5-2.5z"/>'},
- {id:'rejeito',nome:'Rejeito',cor:'#79837E',
+ {id:'reciclavel',nome:'Recicláveis',sub:'sacola transparente',cor:'#FFFFFF',sobre:'#2A322E',fraco:'#5F6A65',clara:true,grupo:'Sacolas',icone:RECICLA},
+ {id:'rejeito',nome:'Rejeito',sub:'sacola preta',cor:'#22262A',grupo:'Sacolas',
   icone:'<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/>'},
- {id:'oleo',nome:'Óleo de cozinha',cor:'#E07B1F',
+ {id:'organico',nome:'Orgânico',sub:'bombona azul',cor:'#1B5FA8',grupo:'Bombona',largo:true,icone:MACA},
+ {id:'vidro',nome:'Vidro',sub:'garrafas, potes',cor:'#1E8A4C',grupo:'Caixas',
+  icone:'<path d="M10.5 3h3v3l1.5 3v9a1.5 1.5 0 01-1.5 1.5h-3A1.5 1.5 0 019 19.5V9l1.5-3z"/><path d="M9 12.5h6"/>'},
+ {id:'ceramica',nome:'Cerâmica',sub:'louça, pratos',cor:'#9C4A2F',grupo:'Caixas',
+  icone:'<path d="M6 8h8v5.5a4 4 0 01-8 0z"/><path d="M14 10h1.6a1.8 1.8 0 010 3.6H14"/><path d="M3.5 18h17a2.5 2.5 0 01-2.5 2.5H6a2.5 2.5 0 01-2.5-2.5z"/>'},
+ {id:'oleo',nome:'Óleo de cozinha',sub:'galão',cor:'#E07B1F',grupo:'Galão',largo:true,
   icone:'<path d="M9 3h6v3l3 4v9a2 2 0 01-2 2H8a2 2 0 01-2-2v-9l3-4z"/><path d="M12 13.5c-1.2 1.2-1.8 2.1-1.8 3a1.8 1.8 0 003.6 0c0-.9-.6-1.8-1.8-3z"/>'}
 ];
+const sobreDe=t=>t.sobre||'#fff';
+const fracoDe=t=>t.fraco||'rgba(255,255,255,.72)';
 
 /* ── armazenamento no aparelho ── */
 function Caixa(chave,padrao){
@@ -381,8 +402,21 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const st={tipo:null,operacao:null,pessoa:null,peso:'',data:hojeISO(),editando:null};
 
 /* ── montagem fixa ── */
-$('#grade').innerHTML=TIPOS.map(t=>
-  `<button class="tipo" style="--c:${t.cor}" data-tipo="${t.id}"><svg viewBox="0 0 24 24">${t.icone}</svg><b>${t.nome}</b></button>`).join('');
+(function(){
+  let h='',grupo=null;
+  TIPOS.forEach(t=>{
+    if(t.grupo!==grupo){
+      if(grupo!==null) h+='</div>';
+      grupo=t.grupo;
+      h+='<div class="grade">';
+    }
+    h+=`<button class="tipo${t.largo?' largo':''}${t.clara?' clara':''}" data-tipo="${t.id}"
+      style="--c:${t.cor};--sobre:${sobreDe(t)};--fraco:${fracoDe(t)}">
+      <svg viewBox="0 0 24 24">${t.icone}</svg>
+      <span><b>${t.nome}</b><span class="sub">${t.sub}</span></span></button>`;
+  });
+  $('#grade').innerHTML=h+'</div>';
+})();
 
 $('#teclado').innerHTML=['1','2','3','4','5','6','7','8','9',',','0','apagar'].map(k=>
   k==='apagar'
@@ -390,7 +424,7 @@ $('#teclado').innerHTML=['1','2','3','4','5','6','7','8','9',',','0','apagar'].m
    : `<button class="tecla" data-tecla="${k}">${k}</button>`).join('');
 
 $('#edChips').innerHTML=TIPOS.map(t=>
-  `<button class="chip" style="background:${t.cor}" data-edtipo="${t.id}" aria-pressed="false">${t.nome}</button>`).join('');
+  `<button class="chip" style="background:${t.cor};color:${sobreDe(t)}${t.clara?';border:1.5px solid #9FABA4':''}" data-edtipo="${t.id}" aria-pressed="false">${t.nome}</button>`).join('');
 
 /* ── pessoas ── */
 function pintaPessoas(){
@@ -503,6 +537,8 @@ function digita(k){
   v.textContent=st.peso||'0,0'; v.classList.toggle('vazio',!st.peso);
   $('#btnSalvar').disabled=!valor();
   $('#btnSalvar').style.background=valor()?st.tipo.cor:'';
+  $('#btnSalvar').style.color=valor()?sobreDe(st.tipo):'';
+  $('#btnSalvar').style.border=(valor()&&st.tipo.clara)?'2px solid #9FABA4':'none';
 }
 const valor=()=>parseFloat((st.peso||'0').replace(',','.'))||0;
 
@@ -519,6 +555,8 @@ $('#btnSalvar').onclick=()=>{
   DB.gravar(regs);
   const c=$('#confirma');
   c.style.setProperty('--c',st.tipo.cor);
+  c.style.color=sobreDe(st.tipo);
+  c.classList.toggle('clara',!!st.tipo.clara);
   $('#confDetalhe').innerHTML=`${st.tipo.nome} · <b>${fmt(valor())} kg</b><br>${esc(st.operacao)} · ${esc(primeiro(st.pessoa))} · ${rotulo(st.data).toLowerCase()}`;
   c.classList.add('ativa');
   if(navigator.vibrate) navigator.vibrate(18);
